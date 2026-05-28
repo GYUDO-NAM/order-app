@@ -1,6 +1,8 @@
 import type { MenuItem, CartItem, OrderStatus, ApiOrder } from '../types';
 
-const BASE = '/api';
+// 개발: Vite proxy로 /api → localhost:4000
+// 배포: VITE_API_URL 환경 변수로 백엔드 주소 지정
+const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(BASE + url, {
