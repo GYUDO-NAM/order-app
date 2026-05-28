@@ -1,23 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import MenuCard from './components/MenuCard';
 import CartSection from './components/CartSection';
 import AdminPage from './components/AdminPage';
-import type { CartItem, MenuItem, MenuOption, Order, OrderStatus } from './types';
-import { menuData } from './data/menuData';
+import type { CartItem, MenuItem, MenuOption } from './types';
+import { fetchMenus, createOrder } from './api';
 import './App.css';
 
 type Page = 'order' | 'admin';
 
 let cartIdCounter = 0;
-let orderIdCounter = 0;
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('order');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [menu, setMenu] = useState<MenuItem[]>(menuData);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [orderMessage, setOrderMessage] = useState('');
+  const [orderError, setOrderError] = useState('');
+
+  useEffect(() => {
+    fetchMenus()
+      .then(setMenu)
+      .catch(() => setOrderError('메뉴를 불러오지 못했습니다. 서버를 확인해주세요.'))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleAddToCart = (item: Omit<CartItem, 'id'>) => {
     const existingIndex = cartItems.findIndex(
@@ -55,37 +62,22 @@ export default function App() {
     setCartItems((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const handleOrder = () => {
+  const handleOrder = async () => {
     if (cartItems.length === 0) return;
-    const total = cartItems.reduce((sum, item) => {
-      const optionPrice = item.selectedOptions.reduce((s, o) => s + o.price, 0);
-      return sum + (item.menuItem.price + optionPrice) * item.quantity;
-    }, 0);
+    try {
+      const result = await createOrder(cartItems);
+      const total = result.total_price;
+      setOrderMessage(`주문 완료! 총 ${total.toLocaleString()}원 (주문번호 #${result.order_id})`);
+      setCartItems([]);
 
-    const newOrder: Order = {
-      id: `order-${++orderIdCounter}`,
-      items: [...cartItems],
-      total,
-      status: '주문접수',
-      createdAt: new Date(),
-    };
+      // 재고 반영을 위해 메뉴 다시 불러오기
+      fetchMenus().then(setMenu).catch(() => {});
 
-    setOrders((prev) => [newOrder, ...prev]);
-    setOrderMessage(`주문이 완료되었습니다! 총 ${total.toLocaleString()}원`);
-    setCartItems([]);
-    setTimeout(() => setOrderMessage(''), 3000);
-  };
-
-  const handleUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
-  };
-
-  const handleUpdateStock = (menuId: string, newStock: number) => {
-    setMenu((prev) =>
-      prev.map((m) => (m.id === menuId ? { ...m, stock: newStock } : m))
-    );
+      setTimeout(() => setOrderMessage(''), 4000);
+    } catch (err: any) {
+      setOrderError(err.message || '주문에 실패했습니다.');
+      setTimeout(() => setOrderError(''), 3000);
+    }
   };
 
   return (
@@ -94,26 +86,29 @@ export default function App() {
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         cartCount={cartItems.reduce((s, c) => s + c.quantity, 0)}
-        pendingOrderCount={orders.filter((o) => o.status === '주문접수' || o.status === '준비중').length}
+        pendingOrderCount={0}
       />
 
       {currentPage === 'order' && (
         <main className="main">
-          {orderMessage && (
-            <div className="order-toast">{orderMessage}</div>
-          )}
+          {orderMessage && <div className="order-toast">{orderMessage}</div>}
+          {orderError && <div className="order-toast error">{orderError}</div>}
 
           <section className="menu-section">
             <h2 className="section-title">메뉴</h2>
-            <div className="menu-grid">
-              {menu.map((item) => (
-                <MenuCard
-                  key={item.id}
-                  item={item}
-                  onAddToCart={handleAddToCart}
-                />
-              ))}
-            </div>
+            {loading ? (
+              <div className="loading">메뉴를 불러오는 중...</div>
+            ) : (
+              <div className="menu-grid">
+                {menu.map((item) => (
+                  <MenuCard
+                    key={item.id}
+                    item={item}
+                    onAddToCart={handleAddToCart}
+                  />
+                ))}
+              </div>
+            )}
           </section>
 
           <CartSection
@@ -127,12 +122,7 @@ export default function App() {
 
       {currentPage === 'admin' && (
         <main className="main">
-          <AdminPage
-            menu={menu}
-            orders={orders}
-            onUpdateStock={handleUpdateStock}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-          />
+          <AdminPage menu={menu} onMenuUpdated={setMenu} />
         </main>
       )}
     </div>

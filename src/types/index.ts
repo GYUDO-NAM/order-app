@@ -30,3 +30,22 @@ export interface Order {
   status: OrderStatus;
   createdAt: Date;
 }
+
+// DB에서 받아오는 주문 타입 (관리자 화면용)
+export interface ApiOrderItem {
+  id: number;
+  order_id: number;
+  menu_id: number;
+  menu_name: string;
+  quantity: number;
+  unit_price: number;
+  options: MenuOption[];
+}
+
+export interface ApiOrder {
+  id: number;
+  total_price: number;
+  status: OrderStatus;
+  created_at: string;
+  items: ApiOrderItem[];
+}
