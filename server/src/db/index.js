@@ -25,7 +25,6 @@ pool.on('connect', () => {
 
 pool.on('error', (err) => {
   console.error('데이터베이스 연결 오류:', err);
-  process.exit(1);
 });
 
 export default pool;
